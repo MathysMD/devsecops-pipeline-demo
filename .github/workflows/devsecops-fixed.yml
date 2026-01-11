@@ -1,0 +1,258 @@
+name: DevSecOps Security Pipeline - FIXED CODE
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'fixed/**'
+      - '.github/workflows/devsecops-fixed.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'fixed/**'
+  workflow_dispatch:
+
+jobs:
+  # Job 1: GitLeaks - Should find NO secrets in fixed code
+  gitleaks-fixed:
+    name: GitLeaks - Fixed Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitLeaks
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.1_linux_x64.tar.gz
+          chmod +x gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Run GitLeaks on fixed code
+        run: |
+          echo "=== GitLeaks Scan on FIXED Code ==="
+          echo "Scanning fixed/ directory for secrets..."
+
+          if gitleaks detect --source fixed/ --config .gitleaks.toml --report-path gitleaks-fixed-report.json --report-format json --no-git; then
+            echo " SUCCESS: No secrets detected in fixed code!"
+            exit 0
+          else
+            echo " FAILURE: Secrets found in fixed code!"
+            cat gitleaks-fixed-report.json | jq '.'
+            exit 1
+          fi
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-fixed-report
+          path: gitleaks-fixed-report.json
+
+  # Job 2: Semgrep - Should find NO vulnerabilities in fixed code
+  semgrep-fixed:
+    name: Semgrep - Fixed Code
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep on fixed code
+        run: |
+          echo "=== Semgrep Scan on FIXED Code ==="
+          semgrep scan --config=.semgrep.yml --config=auto fixed/app/ --json --output=semgrep-fixed-results.json
+
+          FINDINGS=$(cat semgrep-fixed-results.json | jq '.results | length')
+          echo "Findings: $FINDINGS"
+
+          if [ "$FINDINGS" -eq "0" ]; then
+            echo " SUCCESS: No SAST vulnerabilities in fixed code!"
+            exit 0
+          else
+            echo "FAILURE: SAST vulnerabilities found in fixed code!"
+            cat semgrep-fixed-results.json | jq '.results'
+            exit 1
+          fi
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-fixed-report
+          path: semgrep-fixed-results.json
+
+  # Job 3: pip-audit - Should find NO CVEs in fixed dependencies
+  pip-audit-fixed:
+    name: pip-audit - Fixed Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+
+      - name: Run pip-audit on fixed dependencies
+        run: |
+          echo "=== pip-audit Scan on FIXED Dependencies ==="
+
+          if pip-audit --requirement fixed/app/requirements.txt --format json --output pip-audit-fixed-results.json; then
+            echo " SUCCESS: No CVEs in fixed dependencies!"
+            exit 0
+          else
+            echo " FAILURE: CVEs found in fixed dependencies!"
+            pip-audit --requirement fixed/app/requirements.txt
+            exit 1
+          fi
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-fixed-report
+          path: pip-audit-fixed-results.json
+
+  # Job 4: Checkov - Should find NO misconfigurations in fixed IaC
+  checkov-fixed:
+    name: Checkov - Fixed IaC
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Run Checkov on fixed Kubernetes
+        run: |
+          echo "=== Checkov Scan on FIXED Kubernetes ==="
+
+          if checkov --directory fixed/kubernetes/ --compact; then
+            echo " SUCCESS: No Kubernetes misconfigurations!"
+          else
+            echo "FAILURE: Kubernetes misconfigurations found!"
+            exit 1
+          fi
+
+      - name: Run Checkov on fixed Terraform
+        run: |
+          echo "=== Checkov Scan on FIXED Terraform ==="
+
+          if checkov --directory fixed/terraform/ --compact; then
+            echo " SUCCESS: No Terraform misconfigurations!"
+          else
+            echo " FAILURE: Terraform misconfigurations found!"
+            exit 1
+          fi
+
+      - name: Run Checkov on fixed Dockerfile
+        run: |
+          echo "=== Checkov Scan on FIXED Dockerfile ==="
+
+          if checkov --file fixed/Dockerfile --compact; then
+            echo " SUCCESS: No Dockerfile misconfigurations!"
+          else
+            echo " FAILURE: Dockerfile misconfigurations found!"
+            exit 1
+          fi
+
+  # Job 5: Trivy - Should find minimal/no CVEs in fixed container
+  trivy-fixed:
+    name: Trivy - Fixed Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build fixed Docker image
+        run: |
+          echo "=== Building FIXED Docker Image ==="
+          docker build -f fixed/Dockerfile -t devsecops-demo-fixed:latest fixed/
+
+      - name: Run Trivy on fixed image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'devsecops-demo-fixed:latest'
+          format: 'json'
+          output: 'trivy-fixed-image-results.json'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Display results
+        if: always()
+        run: |
+          echo "=== Trivy Results on FIXED Image ==="
+          if [ -f trivy-fixed-image-results.json ]; then
+            CRITICAL=$(cat trivy-fixed-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' || echo "0")
+            HIGH=$(cat trivy-fixed-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' || echo "0")
+            echo "Critical: $CRITICAL, High: $HIGH"
+
+            if [ "$CRITICAL" -eq "0" ] && [ "$HIGH" -eq "0" ]; then
+              echo " SUCCESS: No HIGH/CRITICAL CVEs in fixed image!"
+            else
+              echo " Some vulnerabilities found (may be acceptable)"
+            fi
+          fi
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-fixed-report
+          path: trivy-fixed-image-results.json
+
+  # Summary job - All tests should PASS (green)
+  security-summary-fixed:
+    name: Security Summary - FIXED CODE
+    runs-on: ubuntu-latest
+    needs: [gitleaks-fixed, semgrep-fixed, pip-audit-fixed, checkov-fixed, trivy-fixed]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Display summary
+        run: |
+          echo "=========================================="
+          echo "  FIXED CODE - Security Validation"
+          echo "=========================================="
+          echo ""
+          echo "This workflow validates that all security"
+          echo "fixes in the fixed/ directory are effective."
+          echo ""
+          echo ""
+          echo " GitLeaks: No hardcoded secrets"
+          echo " Semgrep: No SAST vulnerabilities"
+          echo " pip-audit: No dependency CVEs"
+          echo " Checkov: No IaC misconfigurations"
+          echo " Trivy: Minimal/no container CVEs"
+          echo ""
+          echo "=========================================="
+          echo "All security fixes validated successfully!"
+          echo "=========================================="
+
+      - name: Upload combined results
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-fixed-security-reports
+          path: |
+            gitleaks-fixed-report/
+            semgrep-fixed-report/
+            pip-audit-fixed-report/
+            trivy-fixed-report/

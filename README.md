@@ -87,7 +87,34 @@ devsecops-pipeline-demo/
 - Trivy: ~1-2 minutes
 
 ### Comportement du Pipeline
-**IMPORTANT**: Les jobs de sécurité **échoueront (affichage en rouge)** lorsque des vulnérabilités sont détectées. C'est intentionnel et démontre que le pipeline détecte correctement les problèmes de sécurité. Le job final "Security Scan Summary" s'exécutera toujours grâce à `if: always()` pour collecter tous les résultats.
+
+Le projet utilise **deux workflows GitHub Actions** pour démontrer le cycle complet de sécurité:
+
+#### 1. Pipeline "Vulnerable Code" (devsecops.yml) ❌
+**Fichiers scannés**: Code vulnérable à la racine (`app/`, `kubernetes/`, `terraform/`, `Dockerfile`)
+
+**Résultat attendu**: ROUGE (échecs intentionnels)
+- ❌ GitLeaks: 3-5 secrets détectés
+- ❌ Semgrep: 3-4 vulnérabilités SAST
+- ❌ pip-audit: 6+ CVEs dans dépendances
+- ❌ Checkov: 11+ misconfigurations IaC
+- ❌ Trivy: 2+ CVEs HIGH/CRITICAL
+
+**But**: Démontrer la détection automatique des vulnérabilités
+
+#### 2. Pipeline "Fixed Code" (devsecops-fixed.yml) ✅
+**Fichiers scannés**: Code corrigé dans `fixed/`
+
+**Résultat attendu**: VERT (tous les tests passent)
+- ✅ GitLeaks: 0 secrets
+- ✅ Semgrep: 0 vulnérabilités
+- ✅ pip-audit: 0 CVEs
+- ✅ Checkov: 0 misconfigurations
+- ✅ Trivy: 0 CVEs HIGH/CRITICAL
+
+**But**: Valider que les correctifs sont efficaces
+
+**Note**: Les deux workflows s'exécutent automatiquement sur push/PR. Le job "Security Scan Summary" s'exécute toujours (`if: always()`) pour collecter tous les résultats, même en cas d'échec.
 
 ## Détails des Vulnérabilités Intentionnelles
 
@@ -274,7 +301,7 @@ trivy image devsecops-demo:latest
 trivy fs .
 ```
 
-### Exécution du Pipeline GitHub Actions
+### Exécution des Pipelines GitHub Actions
 
 1. Pusher le code sur GitHub:
 ```bash
@@ -286,15 +313,29 @@ git remote add origin <your-repo-url>
 git push -u origin main
 ```
 
-2. Le pipeline se déclenche automatiquement sur:
-   - Push vers `main` ou `develop`
-   - Pull request vers `main`
-   - Déclenchement manuel via l'interface GitHub Actions
+2. Les deux pipelines se déclenchent automatiquement:
+
+   **Pipeline 1: "DevSecOps Security Pipeline" (code vulnérable)**
+   - Se déclenche sur: Push/PR
+   - Scanne: Code à la racine (vulnérable)
+   - Résultat: ❌ ROUGE (détecte les vulnérabilités)
+
+   **Pipeline 2: "DevSecOps Security Pipeline - FIXED CODE"**
+   - Se déclenche sur: Push/PR modifiant fixed/
+   - Scanne: Code dans fixed/ (corrigé)
+   - Résultat: ✅ VERT (aucune vulnérabilité)
 
 3. Consulter les résultats:
-   - Aller dans l'onglet "Actions" de votre repository GitHub
-   - Cliquer sur le dernier workflow run
-   - Télécharger les artifacts pour voir les rapports détaillés
+   - Aller dans l'onglet **"Actions"** de votre repository GitHub
+   - Vous verrez **deux workflows**:
+     - "DevSecOps Security Pipeline" - jobs rouges ❌
+     - "DevSecOps Security Pipeline - FIXED CODE" - jobs verts ✅
+   - Cliquer sur chaque workflow pour voir les détails
+   - Télécharger les artifacts pour les rapports JSON complets
+
+4. Déclencher manuellement un workflow:
+   - Onglet "Actions" → Sélectionner un workflow
+   - Cliquer "Run workflow" → "Run workflow"
 
 ## Résultats du Pipeline
 

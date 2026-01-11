@@ -1,13 +1,10 @@
 # GitLeaks Ignore File
-# Exclude documentation and fixed files from secret scanning
-# Only scan intentionally vulnerable files for demo purposes
+# Exclude documentation files from secret scanning
+# Documentation files contain redacted examples for educational purposes
 
-# Documentation files (contain examples of secrets for educational purposes)
+# Documentation files
 README.md
 FIXES.md
-
-# Fixed/secure versions (should not be scanned)
-fixed/
 
 # Configuration files
 .gitleaks.toml

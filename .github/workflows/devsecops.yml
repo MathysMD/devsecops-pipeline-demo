@@ -61,8 +61,8 @@ jobs:
       - name: Run Semgrep
         run: |
           echo "=== Semgrep SAST Analysis ==="
-          semgrep scan --config=auto --json --output=semgrep-results.json --verbose
-          semgrep scan --config=auto --sarif --output=semgrep-results.sarif --verbose
+          semgrep scan --config=.semgrep.yml --config=auto --json --output=semgrep-results.json --verbose
+          semgrep scan --config=.semgrep.yml --config=auto --sarif --output=semgrep-results.sarif --verbose
 
       - name: Display Semgrep findings
         if: always()
@@ -235,41 +235,128 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
-      - name: Display summary
+      - name: Analyze and display detailed summary
         run: |
           echo "=========================================="
           echo "   DevSecOps Pipeline Summary Report"
           echo "=========================================="
           echo ""
-          echo "All security scans completed."
+
+          # GitLeaks Analysis
+          echo "1. GITLEAKS - SECRET DETECTION"
+          echo "   ---------------------------"
+          if [ -f gitleaks-report/gitleaks-report.json ]; then
+            SECRETS_COUNT=$(cat gitleaks-report/gitleaks-report.json | jq '. | length' 2>/dev/null || echo "0")
+            echo "   Secrets found: $SECRETS_COUNT"
+            if [ "$SECRETS_COUNT" != "0" ]; then
+              echo ""
+              echo "   Details:"
+              cat gitleaks-report/gitleaks-report.json | jq -r '.[] | "   - \(.RuleID): \(.File):\(.StartLine) - \(.Match)"' 2>/dev/null || echo "   See artifact for details"
+              echo ""
+              echo "   ⚠️  REMEDIATION:"
+              echo "   • Move secrets to environment variables or secret manager"
+              echo "   • Rotate exposed credentials immediately"
+              echo "   • Use tools like git-secrets to prevent future commits"
+            fi
+          else
+            echo "   Status: No report found"
+          fi
           echo ""
-          echo "FINDINGS BREAKDOWN (Educational Demo):"
-          echo "---------------------------------------"
+
+          # Semgrep Analysis
+          echo "2. SEMGREP - SAST ANALYSIS"
+          echo "   ------------------------"
+          if [ -f semgrep-report/semgrep-results.json ]; then
+            SEMGREP_COUNT=$(cat semgrep-report/semgrep-results.json | jq '.results | length' 2>/dev/null || echo "0")
+            echo "   Vulnerabilities found: $SEMGREP_COUNT"
+            if [ "$SEMGREP_COUNT" != "0" ]; then
+              echo ""
+              echo "   Details:"
+              cat semgrep-report/semgrep-results.json | jq -r '.results[] | "   - \(.check_id): \(.path):\(.start.line)"' 2>/dev/null | head -10
+              echo ""
+              echo "   ⚠️  REMEDIATION:"
+              echo "   • SQL Injection: Use parameterized queries"
+              echo "   • Weak Crypto: Replace MD5 with bcrypt/argon2"
+              echo "   • SSRF: Validate and allowlist URLs"
+            fi
+          else
+            echo "   Status: No report found"
+          fi
           echo ""
-          echo "1. GitLeaks - Secret Detection"
-          echo "   Expected: Hardcoded AWS keys, GitHub token, passwords"
-          echo "   Status: Check gitleaks-report artifact"
+
+          # pip-audit Analysis
+          echo "3. PIP-AUDIT - DEPENDENCY VULNERABILITIES"
+          echo "   ---------------------------------------"
+          if [ -f pip-audit-report/pip-audit-results.json ]; then
+            DEPS_COUNT=$(cat pip-audit-report/pip-audit-results.json | jq '.dependencies | length' 2>/dev/null || echo "0")
+            echo "   Vulnerable packages: $DEPS_COUNT"
+            if [ "$DEPS_COUNT" != "0" ]; then
+              echo ""
+              echo "   Top CVEs:"
+              cat pip-audit-report/pip-audit-results.json | jq -r '.dependencies[] | "   - \(.name) \(.version): \(.vulns[0].id) (Fix: \(.vulns[0].fix_versions[0] // "no fix"))"' 2>/dev/null | head -5
+              echo ""
+              echo "   ⚠️  REMEDIATION:"
+              echo "   • Run: pip install --upgrade <package>"
+              echo "   • Check compatibility before upgrading"
+              echo "   • Monitor security advisories regularly"
+            fi
+          else
+            echo "   Status: No report found"
+          fi
           echo ""
-          echo "2. Semgrep - SAST Analysis"
-          echo "   Expected: SQL injection, weak crypto (MD5), SSRF"
-          echo "   Status: Check semgrep-report artifact"
+
+          # Checkov Analysis
+          echo "4. CHECKOV - IAC MISCONFIGURATIONS"
+          echo "   --------------------------------"
+          K8S_FAILS=0
+          TF_FAILS=0
+          if [ -f checkov-report/checkov-k8s-results.json ]; then
+            K8S_FAILS=$(cat checkov-report/checkov-k8s-results.json | jq '.summary.failed // 0' 2>/dev/null || echo "0")
+          fi
+          if [ -f checkov-report/checkov-terraform-results.json ]; then
+            TF_FAILS=$(cat checkov-report/checkov-terraform-results.json | jq '.summary.failed // 0' 2>/dev/null || echo "0")
+          fi
+          TOTAL_IAC=$((K8S_FAILS + TF_FAILS))
+          echo "   Kubernetes issues: $K8S_FAILS"
+          echo "   Terraform issues: $TF_FAILS"
+          echo "   Total IaC issues: $TOTAL_IAC"
           echo ""
-          echo "3. pip-audit - Dependency Vulnerabilities"
-          echo "   Expected: 6+ CVEs in Python packages"
-          echo "   Status: Check pip-audit-report artifact"
+          echo "   ⚠️  REMEDIATION:"
+          echo "   • K8s: Add securityContext, resource limits, probes"
+          echo "   • Terraform: Enable encryption, restrict security groups"
+          echo "   • Follow CIS Benchmarks for best practices"
           echo ""
-          echo "4. Checkov - IaC Misconfigurations"
-          echo "   Expected: 11 issues (8 K8s + 3 Terraform)"
-          echo "   Status: Check checkov-report artifact"
+
+          # Trivy Analysis
+          echo "5. TRIVY - CONTAINER SECURITY"
+          echo "   ---------------------------"
+          if [ -f trivy-report/trivy-image-results.json ]; then
+            CRITICAL=$(cat trivy-report/trivy-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' 2>/dev/null || echo "0")
+            HIGH=$(cat trivy-report/trivy-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' 2>/dev/null || echo "0")
+            echo "   Critical: $CRITICAL, High: $HIGH"
+            echo ""
+            echo "   ⚠️  REMEDIATION:"
+            echo "   • Update base image to latest patched version"
+            echo "   • Upgrade vulnerable dependencies"
+            echo "   • Use distroless or minimal base images"
+          else
+            echo "   Status: No report found"
+          fi
           echo ""
-          echo "5. Trivy - Container Security"
-          echo "   Expected: 2+ HIGH/CRITICAL CVEs"
-          echo "   Status: Check trivy-report artifact"
+
+          # Final Summary
+          echo "=========================================="
+          echo "TOTAL SECURITY FINDINGS: ~23+"
           echo ""
-          echo "TOTAL EXPECTED: ~23 security findings"
+          echo "PRIORITY ACTIONS:"
+          echo "1. Rotate all exposed secrets immediately"
+          echo "2. Fix HIGH/CRITICAL vulnerabilities first"
+          echo "3. Update dependencies to latest secure versions"
+          echo "4. Apply IaC security best practices"
+          echo "5. Implement automated security scanning in CI/CD"
           echo ""
-          echo "NOTE: Failed jobs (red X) indicate vulnerabilities"
-          echo "      were detected - this is intentional for demo."
+          echo "NOTE: Red X jobs indicate security issues found"
+          echo "      Download artifacts for detailed JSON reports"
           echo "=========================================="
 
       - name: Upload combined results

@@ -24,6 +24,8 @@ devsecops-pipeline-demo/
 │   └── workflows/
 │       └── devsecops.yml        # Pipeline CI/CD avec 5 outils de sécurité
 ├── Dockerfile                   # Image Docker avec vulnérabilités
+├── .gitleaks.toml               # Configuration GitLeaks personnalisée
+├── .semgrep.yml                 # Règles Semgrep personnalisées
 └── README.md                    # Documentation
 ```
 
@@ -32,15 +34,18 @@ devsecops-pipeline-demo/
 ### 1. GitLeaks - Détection de Secrets
 - Scanne le code pour détecter les secrets hardcodés
 - Détecte les clés API, tokens, mots de passe
-- **Findings attendus**: 1 secret
+- **Configuration**: `.gitleaks.toml` avec règles personnalisées
+- **Findings attendus**: 4+ secrets (AWS keys, GitHub token, passwords, webhooks)
 
 ### 2. Semgrep - Analyse SAST (Static Application Security Testing)
 - Analyse statique du code source
 - Détecte les vulnérabilités courantes (OWASP Top 10)
-- **Findings attendus**: 3 vulnérabilités
-  - SQL Injection
-  - Utilisation de MD5 (cryptographie faible)
-  - Validation d'entrée manquante (SSRF)
+- **Configuration**: `.semgrep.yml` avec règles personnalisées + règles auto
+- **Findings attendus**: 4+ vulnérabilités
+  - SQL Injection (CWE-89)
+  - Utilisation de MD5 (CWE-327)
+  - SSRF - Validation d'entrée manquante (CWE-918)
+  - Hardcoded secrets (CWE-798)
 
 ### 3. pip-audit - Analyse des Dépendances Python
 - Scanne les dépendances Python pour les CVE connus
@@ -65,13 +70,13 @@ devsecops-pipeline-demo/
 
 | Outil       | Type                    | Nombre de Findings | Sévérité          |
 |-------------|-------------------------|--------------------|-------------------|
-| GitLeaks    | Secrets hardcodés       | 1                  | CRITICAL          |
-| Semgrep     | SAST (Code)             | 3                  | HIGH              |
+| GitLeaks    | Secrets hardcodés       | 4+                 | CRITICAL          |
+| Semgrep     | SAST (Code)             | 4+                 | ERROR/HIGH        |
 | pip-audit   | Dépendances Python      | 6+                 | HIGH/MEDIUM       |
-| Checkov     | IaC Kubernetes          | 8                  | MEDIUM/HIGH       |
-| Checkov     | IaC Terraform           | 3                  | HIGH/CRITICAL     |
+| Checkov     | IaC Kubernetes          | 8+                 | MEDIUM/HIGH       |
+| Checkov     | IaC Terraform           | 3+                 | HIGH/CRITICAL     |
 | Trivy       | Container Image         | 2+                 | HIGH/CRITICAL     |
-| **TOTAL**   |                         | **23+**            |                   |
+| **TOTAL**   |                         | **27+**            |                   |
 
 ### Temps d'Exécution Pipeline
 - **Durée totale**: ~4-5 minutes
@@ -97,22 +102,52 @@ DATABASE_PASSWORD = "SuperSecret123!@#"
 SLACK_WEBHOOK = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
 ```
 
+**⚠️ Résolution**:
+- Utiliser des variables d'environnement: `os.getenv('AWS_ACCESS_KEY_ID')`
+- Utiliser un gestionnaire de secrets: AWS Secrets Manager, HashiCorp Vault
+- Rotation immédiate des credentials exposés
+- Références: CWE-798
+
 ### 2. Semgrep SAST Findings
 
-**SQL Injection** (app/main.py:37):
+**SQL Injection (CWE-89)** - app/main.py:37:
 ```python
 query = "SELECT * FROM users WHERE username = '" + username + "'"
 cursor.execute(query)
 ```
 
-**Weak Cryptography - MD5** (app/main.py:52):
+**⚠️ Résolution**:
+```python
+# Utiliser des requêtes paramétrées
+cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+```
+
+**Weak Cryptography - MD5 (CWE-327)** - app/main.py:52:
 ```python
 password_hash = hashlib.md5(password.encode()).hexdigest()
 ```
 
-**Missing Input Validation - SSRF** (app/main.py:74):
+**⚠️ Résolution**:
+```python
+# Utiliser bcrypt
+import bcrypt
+password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+```
+
+**Missing Input Validation - SSRF (CWE-918)** - app/main.py:74:
 ```python
 response = requests.get(url)  # No URL validation
+```
+
+**⚠️ Résolution**:
+```python
+# Valider et utiliser une allowlist
+from urllib.parse import urlparse
+allowed_domains = ['api.example.com']
+parsed = urlparse(url)
+if parsed.netloc not in allowed_domains:
+    raise ValueError("Domain not allowed")
+response = requests.get(url)
 ```
 
 ### 3. pip-audit Dependency CVEs

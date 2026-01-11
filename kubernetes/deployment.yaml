@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsecops-demo-app
+  labels:
+    app: devsecops-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: devsecops-demo
+  template:
+    metadata:
+      labels:
+        app: devsecops-demo
+    spec:
+      containers:
+      - name: api
+        # MISCONFIGURATION 1: No image tag specified (uses :latest implicitly)
+        image: devsecops-demo:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          value: "sqlite:///users.db"
+        - name: API_KEY
+          # MISCONFIGURATION 2: Hardcoded sensitive data in env
+          value: "sk_live_secret_key_12345"
+        # MISCONFIGURATION 3: No resource limits defined
+        # MISCONFIGURATION 4: No resource requests defined
+        # MISCONFIGURATION 5: No livenessProbe defined
+        # MISCONFIGURATION 6: No readinessProbe defined
+        # MISCONFIGURATION 7: No securityContext defined
+        #   - runAsNonRoot not set
+        #   - runAsUser not set
+        #   - allowPrivilegeEscalation not disabled
+        #   - capabilities not dropped
+        #   - readOnlyRootFilesystem not set
+        # MISCONFIGURATION 8: No startup probe defined
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsecops-demo-service
+spec:
+  selector:
+    app: devsecops-demo
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer

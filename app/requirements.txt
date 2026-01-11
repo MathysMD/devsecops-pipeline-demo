@@ -1,0 +1,21 @@
+# Python dependencies with known vulnerabilities for DevSecOps demo
+# WARNING: These versions contain known CVEs - for educational purposes only
+
+# FastAPI with known vulnerabilities
+fastapi==0.65.0
+uvicorn==0.13.4
+
+# HTTP library with CVEs
+requests==2.25.1
+
+# YAML parser with vulnerabilities
+pyyaml==5.3.1
+
+# URL library with known CVEs
+urllib3==1.26.4
+
+# Template engine with vulnerabilities
+jinja2==2.11.3
+
+# Additional vulnerable dependencies
+cryptography==3.3.2

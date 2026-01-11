@@ -1,0 +1,228 @@
+name: DevSecOps Security Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Job 1: GitLeaks - Detect hardcoded secrets
+  gitleaks:
+    name: GitLeaks Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        continue-on-error: true
+
+      - name: Upload GitLeaks results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: gitleaks-report
+          path: |
+            results.json
+            results.sarif
+
+  # Job 2: Semgrep - SAST analysis
+  semgrep:
+    name: Semgrep SAST Analysis
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan --config=auto --json --output=semgrep-results.json || true
+          semgrep scan --config=auto --sarif --output=semgrep-results.sarif || true
+        continue-on-error: true
+
+      - name: Upload Semgrep results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: semgrep-report
+          path: |
+            semgrep-results.json
+            semgrep-results.sarif
+
+  # Job 3: pip-audit - Python dependency vulnerability scanning
+  pip-audit:
+    name: pip-audit Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --requirement app/requirements.txt --format json --output pip-audit-results.json || true
+          pip-audit --requirement app/requirements.txt --format cyclonedx-json --output pip-audit-sbom.json || true
+        continue-on-error: true
+
+      - name: Display pip-audit results
+        run: |
+          echo "=== pip-audit Vulnerability Report ==="
+          pip-audit --requirement app/requirements.txt || true
+
+      - name: Upload pip-audit results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: pip-audit-report
+          path: |
+            pip-audit-results.json
+            pip-audit-sbom.json
+
+  # Job 4: Checkov - Infrastructure as Code scanning
+  checkov:
+    name: Checkov IaC Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Checkov
+        run: |
+          pip install checkov
+
+      - name: Run Checkov on Kubernetes manifests
+        run: |
+          checkov --directory kubernetes/ --output json --output-file-path . --file checkov-k8s-results.json || true
+          checkov --directory kubernetes/ --output cli || true
+        continue-on-error: true
+
+      - name: Run Checkov on Terraform files
+        run: |
+          checkov --directory terraform/ --output json --output-file-path . --file checkov-terraform-results.json || true
+          checkov --directory terraform/ --output cli || true
+        continue-on-error: true
+
+      - name: Run Checkov on Dockerfile
+        run: |
+          checkov --file Dockerfile --output json --output-file-path . --file checkov-dockerfile-results.json || true
+          checkov --file Dockerfile --output cli || true
+        continue-on-error: true
+
+      - name: Upload Checkov results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: checkov-report
+          path: |
+            results_json_*.json
+            checkov-*.json
+
+  # Job 5: Trivy - Container image and filesystem vulnerability scanning
+  trivy:
+    name: Trivy Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t devsecops-demo:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'devsecops-demo:${{ github.sha }}'
+          format: 'json'
+          output: 'trivy-image-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        continue-on-error: true
+
+      - name: Run Trivy on filesystem
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'json'
+          output: 'trivy-fs-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        continue-on-error: true
+
+      - name: Display Trivy image results summary
+        run: |
+          echo "=== Trivy Container Image Scan Results ==="
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --severity HIGH,CRITICAL devsecops-demo:${{ github.sha }} || true
+
+      - name: Upload Trivy results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: trivy-report
+          path: |
+            trivy-image-results.json
+            trivy-fs-results.json
+
+  # Summary job - Collect all results
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [gitleaks, semgrep, pip-audit, checkov, trivy]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Display summary
+        run: |
+          echo "======================================"
+          echo "  DevSecOps Pipeline Summary"
+          echo "======================================"
+          echo ""
+          echo "All security scans completed."
+          echo "Check individual job outputs and artifacts for detailed results."
+          echo ""
+          echo "Expected findings (for demo purposes):"
+          echo "  - GitLeaks: ~1 hardcoded secret"
+          echo "  - Semgrep: ~3 SAST vulnerabilities"
+          echo "  - pip-audit: ~6 dependency CVEs"
+          echo "  - Checkov: ~11 IaC misconfigurations"
+          echo "  - Trivy: 2+ HIGH/CRITICAL CVEs"
+          echo ""
+          echo "Total expected findings: ~23"
+          echo "======================================"
+
+      - name: Upload combined results
+        uses: actions/upload-artifact@v3
+        with:
+          name: all-security-reports
+          path: |
+            gitleaks-report/
+            semgrep-report/
+            pip-audit-report/
+            checkov-report/
+            trivy-report/

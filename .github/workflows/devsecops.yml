@@ -23,7 +23,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
-        continue-on-error: true
 
       - name: Upload GitLeaks results
         uses: actions/upload-artifact@v4
@@ -46,9 +45,8 @@ jobs:
 
       - name: Run Semgrep
         run: |
-          semgrep scan --config=auto --json --output=semgrep-results.json || true
-          semgrep scan --config=auto --sarif --output=semgrep-results.sarif || true
-        continue-on-error: true
+          semgrep scan --config=auto --json --output=semgrep-results.json
+          semgrep scan --config=auto --sarif --output=semgrep-results.sarif
 
       - name: Upload Semgrep results
         uses: actions/upload-artifact@v4
@@ -79,14 +77,13 @@ jobs:
 
       - name: Run pip-audit
         run: |
-          pip-audit --requirement app/requirements.txt --format json --output pip-audit-results.json || true
-          pip-audit --requirement app/requirements.txt --format cyclonedx-json --output pip-audit-sbom.json || true
-        continue-on-error: true
+          pip-audit --requirement app/requirements.txt --format json --output pip-audit-results.json
+          pip-audit --requirement app/requirements.txt --format cyclonedx-json --output pip-audit-sbom.json
 
       - name: Display pip-audit results
         run: |
           echo "=== pip-audit Vulnerability Report ==="
-          pip-audit --requirement app/requirements.txt || true
+          pip-audit --requirement app/requirements.txt
 
       - name: Upload pip-audit results
         uses: actions/upload-artifact@v4
@@ -116,21 +113,18 @@ jobs:
 
       - name: Run Checkov on Kubernetes manifests
         run: |
-          checkov --directory kubernetes/ --output json --output-file-path . --file checkov-k8s-results.json || true
-          checkov --directory kubernetes/ --output cli || true
-        continue-on-error: true
+          checkov --directory kubernetes/ --output json --output-file-path . --file checkov-k8s-results.json
+          checkov --directory kubernetes/ --output cli
 
       - name: Run Checkov on Terraform files
         run: |
-          checkov --directory terraform/ --output json --output-file-path . --file checkov-terraform-results.json || true
-          checkov --directory terraform/ --output cli || true
-        continue-on-error: true
+          checkov --directory terraform/ --output json --output-file-path . --file checkov-terraform-results.json
+          checkov --directory terraform/ --output cli
 
       - name: Run Checkov on Dockerfile
         run: |
-          checkov --file Dockerfile --output json --output-file-path . --file checkov-dockerfile-results.json || true
-          checkov --file Dockerfile --output cli || true
-        continue-on-error: true
+          checkov --file Dockerfile --output json --output-file-path . --file checkov-dockerfile-results.json
+          checkov --file Dockerfile --output cli
 
       - name: Upload Checkov results
         uses: actions/upload-artifact@v4
@@ -160,7 +154,7 @@ jobs:
           format: 'json'
           output: 'trivy-image-results.json'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
-        continue-on-error: true
+          exit-code: '1'
 
       - name: Run Trivy on filesystem
         uses: aquasecurity/trivy-action@master
@@ -170,13 +164,14 @@ jobs:
           format: 'json'
           output: 'trivy-fs-results.json'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
-        continue-on-error: true
+          exit-code: '1'
 
       - name: Display Trivy image results summary
+        if: always()
         run: |
           echo "=== Trivy Container Image Scan Results ==="
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy image --severity HIGH,CRITICAL devsecops-demo:${{ github.sha }} || true
+            aquasec/trivy image --severity HIGH,CRITICAL devsecops-demo:${{ github.sha }}
 
       - name: Upload Trivy results
         uses: actions/upload-artifact@v4

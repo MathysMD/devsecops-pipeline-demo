@@ -81,15 +81,20 @@ devsecops-pipeline-demo/
 - Checkov: ~1 minute
 - Trivy: ~1-2 minutes
 
+### Comportement du Pipeline
+**IMPORTANT**: Les jobs de sécurité **échoueront (affichage en rouge)** lorsque des vulnérabilités sont détectées. C'est intentionnel et démontre que le pipeline détecte correctement les problèmes de sécurité. Le job final "Security Scan Summary" s'exécutera toujours grâce à `if: always()` pour collecter tous les résultats.
+
 ## Détails des Vulnérabilités Intentionnelles
 
 ### 1. GitLeaks Findings
 
 **app/main.py**:
 ```python
-API_KEY = "AKIAIOSFODNN7EXAMPLE1234567890ABCDEFGHIJ"  # Fake AWS-like key
+AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+GITHUB_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
 DATABASE_PASSWORD = "SuperSecret123!@#"
-STRIPE_KEY = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"  # Example test key
+SLACK_WEBHOOK = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
 ```
 
 ### 2. Semgrep SAST Findings

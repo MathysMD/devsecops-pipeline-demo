@@ -12,10 +12,12 @@ import requests
 
 app = FastAPI()
 
-# VULNERABILITY 1: Hardcoded secret (GitLeaks will detect this)
-API_KEY = "AKIAIOSFODNN7EXAMPLE1234567890ABCDEFGHIJ"  # Fake AWS-like key
+# VULNERABILITY 1: Hardcoded secrets (GitLeaks will detect these)
+AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+GITHUB_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
 DATABASE_PASSWORD = "SuperSecret123!@#"
-STRIPE_KEY = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"  # Example test key
+SLACK_WEBHOOK = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
 
 # Initialize SQLite database
 def init_db():
@@ -119,7 +121,7 @@ async def login(username: str, password: str):
     if result:
         return {
             "message": "Login successful",
-            "token": API_KEY,  # Using hardcoded API key
+            "token": GITHUB_TOKEN,  # Using hardcoded secret
             "user": {"id": result[0], "username": result[1]}
         }
     raise HTTPException(status_code=401, detail="Invalid credentials")

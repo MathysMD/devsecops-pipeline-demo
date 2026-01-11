@@ -1,28 +1,30 @@
 # Secure Python dependencies - Updated versions without known CVEs
 # All packages updated to latest secure versions as of January 2025
 
-# FastAPI - Updated to latest version
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
+# FastAPI - Latest stable version
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
 
-# HTTP library - Updated version
+# HTTP library - Latest version
 requests==2.32.3
 
-# YAML parser - Updated to secure version
+# YAML parser - Latest secure version
 pyyaml==6.0.2
 
 # URL library - Latest secure version
-urllib3==2.2.3
+urllib3==2.3.0
 
-# Template engine - Updated version
-jinja2==3.1.4
+# Template engine - Latest version
+jinja2==3.1.5
 
 # Secure password hashing
 bcrypt==4.2.1
 
-# Additional security updates
+# Cryptography - Latest version
 cryptography==44.0.0
 
-# Development dependencies (optional)
-# pytest==8.3.4
-# pytest-cov==6.0.0
+# Python standard library backports
+python-multipart==0.0.20
+
+# Starlette (FastAPI dependency)
+starlette==0.41.3

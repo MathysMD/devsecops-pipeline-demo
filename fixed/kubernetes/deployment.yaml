@@ -145,28 +145,36 @@ spec:
   type: ClusterIP  # FIXED: Use ClusterIP instead of LoadBalancer for internal services
 
 ---
-# Secret templates
-# NOTE: In production, create these secrets using kubectl or a secret manager:
-#
-# kubectl create secret generic aws-credentials \
-#   --from-literal=access-key-id=<your-key> \
-#   --from-literal=secret-access-key=<your-secret>
-#
-# kubectl create secret generic api-tokens \
-#   --from-literal=github-token=<your-token>
-#
-# kubectl create secret generic database-credentials \
-#   --from-literal=password=<your-password>
+# Secret definitions
+# NOTE: In production, these should be created using kubectl with real values
+# or managed by external secret managers (AWS Secrets Manager, Vault, etc.)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+type: Opaque
+data:
+  # Base64 encoded placeholder values (echo -n "placeholder" | base64)
+  access-key-id: cGxhY2Vob2xkZXI=
+  secret-access-key: cGxhY2Vob2xkZXI=
 
-# Example using stringData (for demo only - replace with actual secret management):
-# apiVersion: v1
-# kind: Secret
-# metadata:
-#   name: aws-credentials
-# type: Opaque
-# stringData:
-#   access-key-id: "<set-via-secret-manager>"
-#   secret-access-key: "<set-via-secret-manager>"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-tokens
+type: Opaque
+data:
+  github-token: cGxhY2Vob2xkZXI=
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database-credentials
+type: Opaque
+data:
+  password: cGxhY2Vob2xkZXI=
 
 ---
 # FIXED: Network Policy to restrict traffic

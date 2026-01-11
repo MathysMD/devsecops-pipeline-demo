@@ -13,8 +13,9 @@ import requests
 app = FastAPI()
 
 # VULNERABILITY 1: Hardcoded secret (GitLeaks will detect this)
-API_KEY = "sk_live_51H8K9xL2B3m4n5o6p7q8r9s0t1u2v3w4x5y6z7a8b9c0d1e2f3g4h5i6j7k8l"
+API_KEY = "AKIAIOSFODNN7EXAMPLE1234567890ABCDEFGHIJ"  # Fake AWS-like key
 DATABASE_PASSWORD = "SuperSecret123!@#"
+STRIPE_KEY = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"  # Example test key
 
 # Initialize SQLite database
 def init_db():

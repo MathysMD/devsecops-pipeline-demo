@@ -32,9 +32,9 @@ Ce document détaille toutes les corrections apportées pour résoudre les 27+ v
 
 ```python
 # AVANT (Vulnérable)
-AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
-AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-GITHUB_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
+AWS_ACCESS_KEY_ID = "AKIA[REDACTED]EXAMPLE"  # Hardcoded AWS key
+AWS_SECRET_ACCESS_KEY = "[SECRET_KEY_REDACTED]"  # Hardcoded secret
+GITHUB_TOKEN = "ghp_[REDACTED]"  # Hardcoded GitHub token
 
 # APRÈS (Sécurisé)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')

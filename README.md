@@ -95,11 +95,11 @@ devsecops-pipeline-demo/
 
 **app/main.py**:
 ```python
-AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
-AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-GITHUB_TOKEN = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
-DATABASE_PASSWORD = "SuperSecret123!@#"
-SLACK_WEBHOOK = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX"
+AWS_ACCESS_KEY_ID = "AKIA[REDACTED]EXAMPLE"  # AWS Access Key format
+AWS_SECRET_ACCESS_KEY = "[SECRET_KEY_REDACTED]"  # 40-char secret key
+GITHUB_TOKEN = "ghp_[REDACTED]"  # GitHub Personal Access Token
+DATABASE_PASSWORD = "[REDACTED]"  # Hardcoded password
+SLACK_WEBHOOK = "https://hooks.slack.com/services/[REDACTED]"  # Webhook URL
 ```
 
 **⚠️ Résolution**:

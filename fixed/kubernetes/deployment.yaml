@@ -152,8 +152,8 @@ metadata:
   name: aws-credentials
 type: Opaque
 stringData:
-  access-key-id: "REPLACE-WITH-REAL-VALUE"
-  secret-access-key: "REPLACE-WITH-REAL-VALUE"
+  access-key-id: "changeme"
+  secret-access-key: "changeme"
 
 ---
 apiVersion: v1
@@ -162,7 +162,7 @@ metadata:
   name: api-tokens
 type: Opaque
 stringData:
-  github-token: "REPLACE-WITH-REAL-VALUE"
+  github-token: "changeme"
 
 ---
 apiVersion: v1
@@ -171,7 +171,7 @@ metadata:
   name: database-credentials
 type: Opaque
 stringData:
-  password: "REPLACE-WITH-REAL-VALUE"
+  password: "changeme"
 
 ---
 # FIXED: Network Policy to restrict traffic

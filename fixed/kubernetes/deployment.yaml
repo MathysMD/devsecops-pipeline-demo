@@ -1,0 +1,211 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devsecops-demo-app
+  labels:
+    app: devsecops-demo
+    version: "2.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: devsecops-demo
+  template:
+    metadata:
+      labels:
+        app: devsecops-demo
+        version: "2.0"
+    spec:
+      # FIXED: Security context at pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+      - name: api
+        # FIXED: Use specific image tag instead of :latest
+        image: devsecops-demo:v2.0.0
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+
+        # FIXED: Use Secrets instead of hardcoded values
+        env:
+        - name: DATABASE_URL
+          value: "sqlite:///users.db"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: api-tokens
+              key: github-token
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: password
+
+        # FIXED: Resource limits and requests defined
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        # FIXED: Liveness probe defined
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # FIXED: Readiness probe defined
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # FIXED: Startup probe for slow-starting containers
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
+
+        # FIXED: Security context at container level
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+            add:
+              - NET_BIND_SERVICE
+
+        # Volume mounts for writable directories (since root FS is read-only)
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: app-data
+          mountPath: /app/data
+
+      # Volumes for writable directories
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: app-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devsecops-demo-service
+  labels:
+    app: devsecops-demo
+spec:
+  selector:
+    app: devsecops-demo
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP  # FIXED: Use ClusterIP instead of LoadBalancer for internal services
+
+---
+# Secret templates (values should be base64 encoded in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+type: Opaque
+stringData:
+  access-key-id: "REPLACE-WITH-REAL-VALUE"
+  secret-access-key: "REPLACE-WITH-REAL-VALUE"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-tokens
+type: Opaque
+stringData:
+  github-token: "REPLACE-WITH-REAL-VALUE"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database-credentials
+type: Opaque
+stringData:
+  password: "REPLACE-WITH-REAL-VALUE"
+
+---
+# FIXED: Network Policy to restrict traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: devsecops-demo-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: devsecops-demo
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          role: frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          role: database
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
